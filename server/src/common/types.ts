@@ -112,10 +112,71 @@ export interface SpatioTemporalFrame {
     foupId?: string;
     status: OhtStatus['status'];
     color: string;
+    warningState?: OhtWarningState;
   }>;
   gridMetrics: {
     totalCells: number;
     occupiedCells: number;
     collisionWarnings: number;
   };
+}
+
+export type OhtWarningState = 'NONE' | 'BELT_FATIGUE' | 'VIBRATION_ANOMALY' | 'EMERGENCY';
+
+export interface MotorTorqueSample {
+  timestamp: number;
+  torque: number;
+  zVibration: number;
+  zPosition: number;
+}
+
+export interface BeltFatigueBaseline {
+  id: string;
+  name: string;
+  durationMs: number;
+  sampleRateHz: number;
+  torqueWaveform: number[];
+  vibrationWaveform: number[];
+  createdAt: number;
+}
+
+export interface BeltFatigueAlarm {
+  id: string;
+  ohtId: string;
+  dtwDistance: number;
+  threshold: number;
+  baselineId: string;
+  torqueWaveform: number[];
+  baselineTorqueWaveform: number[];
+  vibrationWaveform: number[];
+  baselineVibrationWaveform: number[];
+  timestamp: number;
+  acknowledged: boolean;
+  actionTaken: 'NONE' | 'EMERGENCY_DETACH' | 'DIVER_TO_ST09';
+}
+
+export interface DtwResult {
+  distance: number;
+  costMatrix: number[][];
+  warpPath: Array<[number, number]>;
+  normalizedDistance: number;
+}
+
+export enum VerticalActionState {
+  IDLE = 'IDLE',
+  DESCENDING = 'DESCENDING',
+  GRASPING = 'GRASPING',
+  ASCENDING = 'ASCENDING',
+}
+
+export interface OhtVerticalState {
+  ohtId: string;
+  actionState: VerticalActionState;
+  zPosition: number;
+  targetZ: number;
+  currentTorque: number;
+  currentVibration: number;
+  samples: MotorTorqueSample[];
+  actionStartTime: number;
+  lastSampleTime: number;
 }

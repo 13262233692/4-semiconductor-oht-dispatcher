@@ -231,4 +231,85 @@ export class SecsParserService {
     header.writeUInt32BE(systemBytes, 10);
     return header;
   }
+
+  buildS2F41HostCommand(
+    systemBytes: number,
+    commandId: string,
+    params: Array<{ name: string; value: string }> = [],
+    wBit: boolean = true,
+  ): Buffer {
+    const header = Buffer.alloc(14);
+
+    let bodyOffset = 0;
+    const maxBodySize = 1024;
+    const body = Buffer.alloc(maxBodySize);
+
+    body.writeUInt8(0x01, bodyOffset++);
+    body.writeUInt8(0x00, bodyOffset++);
+    const listCountPos = bodyOffset++;
+
+    body.writeUInt8(0x20, bodyOffset++);
+    const cmdIdLen = Math.min(commandId.length, 255);
+    body.writeUInt8(cmdIdLen, bodyOffset++);
+    body.write(commandId, bodyOffset, cmdIdLen, 'ascii');
+    bodyOffset += cmdIdLen;
+
+    body.writeUInt8(0x01, bodyOffset++);
+    body.writeUInt8(0x00, bodyOffset++);
+    const paramCountPos = bodyOffset++;
+    let paramCount = 0;
+
+    for (const param of params) {
+      body.writeUInt8(0x01, bodyOffset++);
+      body.writeUInt8(0x00, bodyOffset++);
+      body.writeUInt8(0x02, bodyOffset++);
+
+      body.writeUInt8(0x20, bodyOffset++);
+      const nameLen = Math.min(param.name.length, 255);
+      body.writeUInt8(nameLen, bodyOffset++);
+      body.write(param.name, bodyOffset, nameLen, 'ascii');
+      bodyOffset += nameLen;
+
+      body.writeUInt8(0x20, bodyOffset++);
+      const valLen = Math.min(param.value.length, 255);
+      body.writeUInt8(valLen, bodyOffset++);
+      body.write(param.value, bodyOffset, valLen, 'ascii');
+      bodyOffset += valLen;
+
+      paramCount++;
+    }
+
+    body[paramCountPos] = paramCount;
+    body[listCountPos] = 2;
+
+    const bodyLength = bodyOffset;
+
+    header.writeUInt32BE(10 + bodyLength, 0);
+    header.writeUInt16BE(0xFFFF, 4);
+
+    const streamByte = 0x02;
+    const functionByte = 0x29;
+    header.writeUInt8(wBit ? streamByte | 0x80 : streamByte, 6);
+    header.writeUInt8(functionByte, 7);
+
+    header.writeUInt8(0x00, 8);
+    header.writeUInt8(SecsMessageType.DATA_MESSAGE, 9);
+    header.writeUInt32BE(systemBytes, 10);
+
+    return Buffer.concat([header, body.slice(0, bodyLength)]);
+  }
+
+  buildEmergencyDetachCommand(systemBytes: number, ohtId: string, targetStation: string = 'ST-09'): Buffer {
+    return this.buildS2F41HostCommand(
+      systemBytes,
+      'EMERGENCY_DETACH_AND_DIVERT',
+      [
+        { name: 'OHT_ID', value: ohtId },
+        { name: 'TARGET_STATION', value: targetStation },
+        { name: 'REASON', value: 'BELT_FATIGUE_DETECTED' },
+        { name: 'PRIORITY', value: 'CRITICAL' },
+      ],
+      true,
+    );
+  }
 }

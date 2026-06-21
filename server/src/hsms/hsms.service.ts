@@ -80,4 +80,47 @@ export class HsmsService extends EventEmitter implements OnModuleInit {
   getActiveConnections(): number {
     return this.tcpServer.getClientCount();
   }
+
+  sendHostCommand(
+    clientId: string,
+    commandId: string,
+    params: Array<{ name: string; value: string }> = [],
+  ): boolean {
+    const systemBytes = Math.floor(Math.random() * 0xffffffff);
+    const msg = this.secsParser.buildS2F41HostCommand(systemBytes, commandId, params, true);
+    const success = this.tcpServer.sendMessage(clientId, msg);
+    if (success) {
+      this.logger.log(`S2F41 sent to ${clientId}: ${commandId} (sys=0x${systemBytes.toString(16)})`);
+    } else {
+      this.logger.warn(`Failed to send S2F41 to ${clientId}: ${commandId}`);
+    }
+    return success;
+  }
+
+  sendEmergencyDetach(ohtId: string, targetStation: string = 'ST-09'): boolean {
+    const clientId = this.findClientByOhtId(ohtId);
+    if (!clientId) {
+      this.logger.error(`Cannot send emergency detach: no client for OHT ${ohtId}`);
+      return false;
+    }
+    const systemBytes = Math.floor(Math.random() * 0xffffffff);
+    const msg = this.secsParser.buildEmergencyDetachCommand(systemBytes, ohtId, targetStation);
+    const success = this.tcpServer.sendMessage(clientId, msg);
+    if (success) {
+      this.logger.warn(
+        `🚨 EMERGENCY DETACH SENT to ${ohtId} via ${clientId}, diverting to ${targetStation}`,
+      );
+    }
+    return success;
+  }
+
+  private ohtClientMap: Map<string, string> = new Map();
+
+  registerOhtClient(ohtId: string, clientId: string) {
+    this.ohtClientMap.set(ohtId, clientId);
+  }
+
+  findClientByOhtId(ohtId: string): string | undefined {
+    return this.ohtClientMap.get(ohtId);
+  }
 }
