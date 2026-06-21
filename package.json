@@ -1,0 +1,20 @@
+{
+  "name": "oht-dispatcher",
+  "version": "1.0.0",
+  "description": "300mm Semiconductor Fab OHT Traffic Control Center",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace server run start:dev",
+    "dev:client": "npm --workspace client run dev",
+    "build:server": "npm --workspace server run build",
+    "build:client": "npm --workspace client run build",
+    "install:all": "npm install"
+  },
+  "keywords": ["semiconductor", "oht", "secs-ii", "hsms", "nestjs", "vue3", "pixijs"],
+  "author": "OHT Dispatcher Team",
+  "license": "MIT"
+}
