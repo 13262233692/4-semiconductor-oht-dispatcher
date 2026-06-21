@@ -14,6 +14,7 @@ const state_buffer_module_1 = require("./state-buffer/state-buffer.module");
 const routing_module_1 = require("./routing/routing.module");
 const websocket_module_1 = require("./websocket/websocket.module");
 const simulator_module_1 = require("./simulator/simulator.module");
+const redis_module_1 = require("./redis/redis.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -24,6 +25,7 @@ exports.AppModule = AppModule = __decorate([
                 isGlobal: true,
                 envFilePath: '.env',
             }),
+            redis_module_1.RedisModule,
             hsms_module_1.HsmsModule,
             state_buffer_module_1.StateBufferModule,
             routing_module_1.RoutingModule,

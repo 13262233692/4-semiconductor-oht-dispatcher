@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { StateBufferService } from '../state-buffer/state-buffer.service';
+import { DistributedLockService } from '../redis/distributed-lock.service';
 import { RouteSegment, GridCell, OhtStatus } from '../common/types';
 
 interface PriorityQueueItem {
@@ -73,7 +74,10 @@ export class RoutingService implements OnModuleInit {
     collisionAvoidances: 0,
   };
 
-  constructor(private readonly stateBuffer: StateBufferService) {
+  constructor(
+    private readonly stateBuffer: StateBufferService,
+    private readonly lockService: DistributedLockService,
+  ) {
     this.ROUTING_INTERVAL_MS = parseInt(process.env.ROUTING_RECALCULATION_INTERVAL_MS || '100', 10);
   }
 
@@ -202,6 +206,12 @@ export class RoutingService implements OnModuleInit {
       if (cell.reservedBy && cell.reservedBy !== ohtId && (cell.reservedUntil || 0) > Date.now()) {
         return false;
       }
+      if (this.lockService['redis'].isReady()) {
+        const lockInfo = this.checkRedisLockCached(n.x, n.y, ohtId);
+        if (lockInfo && lockInfo.locked && lockInfo.owner !== ohtId) {
+          return false;
+        }
+      }
       return true;
     });
   }
@@ -325,7 +335,8 @@ export class RoutingService implements OnModuleInit {
 
       if (newRoute && newRoute.length > 0) {
         this.stateBuffer.setOhtRoute(oht.id, newRoute);
-        this.stateBuffer.reservePath(oht.id, newRoute.slice(0, this.RESERVATION_LOOKAHEAD));
+        const lookahead = newRoute.slice(0, this.RESERVATION_LOOKAHEAD);
+        this.reservePathAtomic(oht.id, lookahead, oht.assignedRoute || []);
         updated++;
       }
     }
@@ -350,7 +361,7 @@ export class RoutingService implements OnModuleInit {
     return false;
   }
 
-  assignRoute(ohtId: string, targetX: number, targetY: number): RouteSegment[] | null {
+  async assignRoute(ohtId: string, targetX: number, targetY: number): Promise<RouteSegment[] | null> {
     const oht = this.stateBuffer.getOht(ohtId);
     if (!oht) {
       this.logger.warn(`assignRoute: OHT ${ohtId} not found`);
@@ -360,15 +371,17 @@ export class RoutingService implements OnModuleInit {
     const route = this.findShortestPath(oht.gridX, oht.gridY, targetX, targetY, ohtId, true);
     if (route && route.length > 0) {
       this.stateBuffer.setOhtRoute(ohtId, route);
-      const reserved = this.stateBuffer.reservePath(ohtId, route.slice(0, this.RESERVATION_LOOKAHEAD));
-      if (!reserved) {
-        this.logger.warn(`Could not reserve path for ${ohtId}, retrying without reservations...`);
+      const lookahead = route.slice(0, this.RESERVATION_LOOKAHEAD);
+      const reserved = await this.reservePathAtomic(ohtId, lookahead, oht.assignedRoute || []);
+      if (!reserved.success) {
+        this.logger.warn(`Could not reserve path for ${ohtId}: ${reserved.error}`);
       }
     }
     return route;
   }
 
   getRoutingStats() {
+    const lockStats = this.lockService.getStats();
     return {
       ...this.routingStats,
       successRate: this.routingStats.totalRequests > 0
@@ -377,10 +390,88 @@ export class RoutingService implements OnModuleInit {
       avgPathLength: this.routingStats.successfulRoutes > 0
         ? (this.routingStats.totalPathLength / this.routingStats.successfulRoutes).toFixed(2)
         : 'N/A',
+      distributedLock: lockStats,
     };
   }
 
   getReservationLookahead(): number {
     return this.RESERVATION_LOOKAHEAD;
+  }
+
+  private lockCache = new Map<string, { info: any; cachedAt: number }>();
+  private readonly LOCK_CACHE_TTL_MS = 50;
+
+  private checkRedisLockCached(x: number, y: number, ohtId: string): { locked: boolean; owner: string } | null {
+    const cacheKey = `${x}:${y}`;
+    const now = Date.now();
+    const cached = this.lockCache.get(cacheKey);
+
+    if (cached && now - cached.cachedAt < this.LOCK_CACHE_TTL_MS) {
+      return cached.info;
+    }
+
+    this.lockService.getLockInfo(x, y)
+      .then((info) => {
+        this.lockCache.set(cacheKey, {
+          info: info ? { locked: true, owner: info.owner } : { locked: false, owner: '' },
+          cachedAt: now,
+        });
+      })
+      .catch(() => {});
+
+    return null;
+  }
+
+  private async reservePathAtomic(
+    ohtId: string,
+    newSegments: RouteSegment[],
+    oldSegments: RouteSegment[],
+  ): Promise<{ success: boolean; error?: string; lockedCells?: Array<{ x: number; y: number }> }> {
+    this.stateBuffer.reservePath(ohtId, newSegments);
+
+    if (!this.lockService['redis'].isReady()) {
+      return { success: true, error: 'Redis unavailable, using in-memory only' };
+    }
+
+    if (oldSegments.length > 0) {
+      const releaseLookahead = Math.min(this.RESERVATION_LOOKAHEAD, oldSegments.length);
+      for (let i = 0; i < releaseLookahead; i++) {
+        const seg = oldSegments[i];
+        if (seg) {
+          await this.lockService.releaseGridLock(seg.toX, seg.toY, ohtId).catch(() => {});
+        }
+      }
+    }
+
+    const result = await this.lockService.acquirePathLocks(
+      newSegments.map((s) => ({ toX: s.toX, toY: s.toY })),
+      ohtId,
+      15000,
+    );
+
+    if (!result.success) {
+      this.logger.warn(`Atomic path lock failed for ${ohtId}: ${result.error}`);
+      await this.lockService.releasePathLocks(
+        result.acquired.map((key) => {
+          const parts = key.replace('grid:lock:', '').split(':');
+          return { toX: parseInt(parts[0]), toY: parseInt(parts[1]) };
+        }),
+        ohtId,
+      );
+      return { success: false, error: result.error };
+    }
+
+    return {
+      success: true,
+      lockedCells: newSegments.map((s) => ({ x: s.toX, y: s.toY })),
+    };
+  }
+
+  async releaseAllLocksForOht(ohtId: string): Promise<void> {
+    const locks = this.lockService.getActiveLocks().filter((l) => l.owner === ohtId);
+    for (const lock of locks) {
+      const parts = lock.key.replace('grid:lock:', '').split(':');
+      await this.lockService.releaseGridLock(parseInt(parts[0]), parseInt(parts[1]), ohtId).catch(() => {});
+    }
   }
 }

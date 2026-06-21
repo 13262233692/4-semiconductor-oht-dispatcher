@@ -90,9 +90,9 @@ let WebsocketGateway = WebsocketGateway_1 = class WebsocketGateway {
             routing: routingStats,
         });
     }
-    handleAssignRoute(data, client) {
+    async handleAssignRoute(data, client) {
         this.logger.log(`Route assignment request: ${data.ohtId} → (${data.targetX},${data.targetY})`);
-        const route = this.routingService.assignRoute(data.ohtId, data.targetX, data.targetY);
+        const route = await this.routingService.assignRoute(data.ohtId, data.targetX, data.targetY);
         client.emit('control:routeAssigned', {
             ohtId: data.ohtId,
             success: route !== null,
@@ -223,7 +223,7 @@ __decorate([
     __param(1, (0, websockets_1.ConnectedSocket)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, socket_io_1.Socket]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], WebsocketGateway.prototype, "handleAssignRoute", null);
 __decorate([
     (0, websockets_1.SubscribeMessage)('control:getOhtList'),

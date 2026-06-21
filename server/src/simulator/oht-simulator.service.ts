@@ -98,7 +98,9 @@ export class OhtSimulatorService extends EventEmitter implements OnModuleInit {
         routeRefreshCounter: Math.floor(Math.random() * 50),
       });
 
-      this.routingService.assignRoute(ohtId, target.x, target.y);
+      this.routingService.assignRoute(ohtId, target.x, target.y).catch((e) => {
+        this.logger.warn(`Failed to assign route for ${ohtId}: ${e.message}`);
+      });
       this.emitS6F11Report(ohtId, startX, startY, this.ohtInternalStates.get(ohtId)!.speed, 0, hasFoup ? FoupState.LOADED : FoupState.EMPTY, hasFoup ? this.ohtInternalStates.get(ohtId)!.foupId : undefined);
     }
   }
@@ -162,7 +164,9 @@ export class OhtSimulatorService extends EventEmitter implements OnModuleInit {
       state.routeRefreshCounter = 0;
       const oht = this.stateBuffer.getOht(ohtId);
       if (oht && (!oht.assignedRoute || oht.assignedRoute.length === 0)) {
-        this.routingService.assignRoute(ohtId, state.targetGridX, state.targetGridY);
+        this.routingService.assignRoute(ohtId, state.targetGridX, state.targetGridY).catch((e) => {
+          this.logger.warn(`Failed to refresh route for ${ohtId}: ${e.message}`);
+        });
       }
     }
 
@@ -281,7 +285,9 @@ export class OhtSimulatorService extends EventEmitter implements OnModuleInit {
       const target = this.pickRandomTarget(state.currentGridX, state.currentGridY);
       state.targetGridX = target.x;
       state.targetGridY = target.y;
-      this.routingService.assignRoute(ohtId, target.x, target.y);
+      this.routingService.assignRoute(ohtId, target.x, target.y).catch((e) => {
+        this.logger.warn(`Failed to assign route for ${ohtId}: ${e.message}`);
+      });
       this.logger.debug(`OHT ${ohtId} new target: (${target.x},${target.y})`);
     }, isStation ? 1500 : 200);
   }

@@ -106,12 +106,12 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   }
 
   @SubscribeMessage('control:assignRoute')
-  handleAssignRoute(
+  async handleAssignRoute(
     @MessageBody() data: { ohtId: string; targetX: number; targetY: number },
     @ConnectedSocket() client: Socket,
   ) {
     this.logger.log(`Route assignment request: ${data.ohtId} → (${data.targetX},${data.targetY})`);
-    const route = this.routingService.assignRoute(data.ohtId, data.targetX, data.targetY);
+    const route = await this.routingService.assignRoute(data.ohtId, data.targetX, data.targetY);
     client.emit('control:routeAssigned', {
       ohtId: data.ohtId,
       success: route !== null,

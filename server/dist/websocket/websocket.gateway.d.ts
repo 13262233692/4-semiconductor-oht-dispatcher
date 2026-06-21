@@ -23,7 +23,7 @@ export declare class WebsocketGateway implements OnGatewayInit, OnGatewayConnect
         ohtId: string;
         targetX: number;
         targetY: number;
-    }, client: Socket): void;
+    }, client: Socket): Promise<void>;
     handleGetOhtList(client: Socket): void;
     handleGetGridMap(client: Socket): void;
     handleRequestSnapshot(client: Socket): void;

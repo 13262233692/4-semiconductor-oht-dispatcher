@@ -1,8 +1,10 @@
 import { OnModuleInit } from '@nestjs/common';
 import { StateBufferService } from '../state-buffer/state-buffer.service';
+import { DistributedLockService } from '../redis/distributed-lock.service';
 import { RouteSegment } from '../common/types';
 export declare class RoutingService implements OnModuleInit {
     private readonly stateBuffer;
+    private readonly lockService;
     private readonly logger;
     private readonly ROUTING_INTERVAL_MS;
     private readonly RESERVATION_LOOKAHEAD;
@@ -10,7 +12,7 @@ export declare class RoutingService implements OnModuleInit {
     private gridRows;
     private adjacencyCache;
     private routingStats;
-    constructor(stateBuffer: StateBufferService);
+    constructor(stateBuffer: StateBufferService, lockService: DistributedLockService);
     onModuleInit(): void;
     private buildAdjacencyCache;
     private nodeKey;
@@ -24,10 +26,23 @@ export declare class RoutingService implements OnModuleInit {
     private pathToSegments;
     recalculateAllRoutes(): number;
     private needsRouteRecalculation;
-    assignRoute(ohtId: string, targetX: number, targetY: number): RouteSegment[] | null;
+    assignRoute(ohtId: string, targetX: number, targetY: number): Promise<RouteSegment[] | null>;
     getRoutingStats(): {
         successRate: string;
         avgPathLength: string;
+        distributedLock: {
+            activeLockCount: number;
+            successRate: string;
+            acquireAttempts: number;
+            acquireSuccess: number;
+            acquireFailed: number;
+            acquireForceUsed: number;
+            releaseSuccess: number;
+            releaseFailed: number;
+            zombiesDetected: number;
+            zombiesCleared: number;
+            renewals: number;
+        };
         totalRequests: number;
         successfulRoutes: number;
         failedRoutes: number;
@@ -35,4 +50,9 @@ export declare class RoutingService implements OnModuleInit {
         collisionAvoidances: number;
     };
     getReservationLookahead(): number;
+    private lockCache;
+    private readonly LOCK_CACHE_TTL_MS;
+    private checkRedisLockCached;
+    private reservePathAtomic;
+    releaseAllLocksForOht(ohtId: string): Promise<void>;
 }

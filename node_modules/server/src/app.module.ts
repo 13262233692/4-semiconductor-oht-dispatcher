@@ -5,6 +5,7 @@ import { StateBufferModule } from './state-buffer/state-buffer.module';
 import { RoutingModule } from './routing/routing.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { SimulatorModule } from './simulator/simulator.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { SimulatorModule } from './simulator/simulator.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    RedisModule,
     HsmsModule,
     StateBufferModule,
     RoutingModule,

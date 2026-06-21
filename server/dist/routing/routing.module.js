@@ -9,13 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RoutingModule = void 0;
 const common_1 = require("@nestjs/common");
 const state_buffer_module_1 = require("../state-buffer/state-buffer.module");
+const redis_module_1 = require("../redis/redis.module");
 const routing_service_1 = require("./routing.service");
 let RoutingModule = class RoutingModule {
 };
 exports.RoutingModule = RoutingModule;
 exports.RoutingModule = RoutingModule = __decorate([
     (0, common_1.Module)({
-        imports: [state_buffer_module_1.StateBufferModule],
+        imports: [state_buffer_module_1.StateBufferModule, redis_module_1.RedisModule],
         providers: [routing_service_1.RoutingService],
         exports: [routing_service_1.RoutingService],
     })
